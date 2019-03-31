@@ -69,6 +69,7 @@ class ProgressStateTest {
             assertTrue { ps.finished() }
 
             ps.reset(100)
+            Thread.sleep(10)
 
             assertEquals(100, ps.total)
             assertEquals(0, ps.curr)
