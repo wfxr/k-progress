@@ -4,6 +4,7 @@ version = "0.1.0"
 plugins {
     id("org.jetbrains.kotlin.jvm").version("1.3.21")
     id("com.github.johnrengelman.shadow").version("5.0.0")
+    maven
 }
 
 repositories {
