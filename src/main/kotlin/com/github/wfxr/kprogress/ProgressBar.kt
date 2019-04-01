@@ -46,17 +46,11 @@ class ProgressBar private constructor(
             this(title, speedFormat, etaFormat, printStream, refreshInterval, tasks.map { ProgressState(it) })
 
     private fun initTerminal() {
-        Runtime.getRuntime().addShutdownHook(thread(false) {
-            close()
-            synchronized(terminal) {
-                terminal.putCharacter('\n')
-                terminal.setCursorVisible(true)
-            }
-        })
+        Runtime.getRuntime().addShutdownHook(thread(false) { close() })
         GlobalScope.launch {
             @Suppress("BlockingMethodInNonBlockingContext")
             while (true) {
-                terminal.putCharacter(terminal.readInput().character)
+                terminal.readInput()
             }
         }
         terminal.setCursorVisible(false)
@@ -69,13 +63,17 @@ class ProgressBar private constructor(
     override fun close() {
         refreshTimer.cancel()
         refresh()
+        terminal.setCursorVisible(true)
+        terminal.flush()
     }
 
     private fun refresh() {
         val titles = titles()
         val titlesLen = titles.maxBy { it.length }!!.length
-        val fractions = totals()
-        val fractionsLen = fractions.maxBy { it.length }!!.length
+        val totals = totals()
+        val totalsLen = totals.maxBy { it.length }!!.length
+        val currs = currs()
+        val currsLen = currs.maxBy { it.length }!!.length
         val speeds = speeds()
         val speedsLen = speeds.maxBy { it.length }!!.length
         val etas = etas()
@@ -83,22 +81,22 @@ class ProgressBar private constructor(
         val percentages = percentages()
         val percentagesLen = percentages.maxBy { it.length }!!.length
 
-        val progressesLen = terminal.terminalSize.columns - fractionsLen - titlesLen - speedsLen - etasLen - percentagesLen - 7
+        val progressesLen = terminal.terminalSize.columns - totalsLen - currsLen - titlesLen - speedsLen - etasLen - percentagesLen - 6 - 2
         val progresses = progresses(progressesLen)
 
         for (id in 0 until size) {
             val pos = pos.withRelativeRow(id).withColumn(0)
-            synchronized(terminal) {
-                tui.putString(pos,
-                              "%${titlesLen}s %${fractionsLen}s %${speedsLen}s %${etasLen}s [%-${progressesLen}s] %${percentagesLen}s".format(
-                                  titles[id],
-                                  fractions[id],
-                                  speeds[id],
-                                  etas[id],
-                                  progresses[id],
-                                  percentages[id]))
-            }
+            tui.putString(pos,
+                          "%-${titlesLen}s %${currsLen}s/%${totalsLen}s %${speedsLen}s [%-${progressesLen}s] %${percentagesLen}s %${etasLen}s".format(
+                              titles[id],
+                              currs[id],
+                              totals[id],
+                              speeds[id],
+                              progresses[id],
+                              percentages[id],
+                              etas[id]))
         }
+        terminal.flush()
     }
 
     private fun percentages() =
@@ -110,8 +108,13 @@ class ProgressBar private constructor(
 
             }
 
+    private fun currs() =
+            map {
+                it.curr.toString()
+            }
+
     private fun totals() =
-            this.map {
+            map {
                 when (val total = it.total) {
                     null -> "???"
                     else -> "$total"
@@ -124,27 +127,21 @@ class ProgressBar private constructor(
             }
 
     private fun speeds() =
-            this.map {
+            map {
                 speedFormat.format(it.speed())
             }
 
     private fun etas() =
-            this.map {
+            map {
                 val eta = it.eta()
                 when (eta) {
-                    null -> "???"
-                    else -> {
-                        val etaMilli = eta.toMillis()
-                        if (etaMilli < 0) {
-                            println(etaMilli)
-                        }
-                        DurationFormatUtils.formatDuration(eta.toMillis(), etaFormat, true)
-                    }
+                    null -> "??? ETA"
+                    else -> "${DurationFormatUtils.formatDuration(eta.toMillis(), etaFormat, true)} ETA"
                 }
             }
 
     private fun progresses(size: Int) =
-            this.map {
+            map {
                 val percentage = it.percentage()
                 val p = when {
                     percentage == null -> return@map ">".repeat(size)
@@ -154,10 +151,31 @@ class ProgressBar private constructor(
                 }
                 val count = (p * size).toInt()
                 when {
-                    count < size -> "${"#".repeat(count)}>"
-                    count > 0    -> "#".repeat(count)
+                    count < size -> "${"=".repeat(count)}>"
+                    count > 0    -> "=".repeat(count)
                     else         -> ""
                 }
             }
+
+    fun curr() = sumByLong { it.curr }
+    fun total(): Long? {
+        var sum = 0L
+        forEach {
+            val total = it.total
+            if (total == null)
+                return null
+            else
+                sum += total
+        }
+        return sum
+    }
+
+    private inline fun <T> Iterable<T>.sumByLong(selector: (T) -> Long): Long {
+        var sum = 0L
+        for (element in this) {
+            sum += selector(element)
+        }
+        return sum
+    }
 }
 
