@@ -2,7 +2,7 @@ group = "com.github.wfxr"
 version = try {
     rootProject.file("version").readText().trim()
 } catch (e: Exception) {
-    "SNAPSHOT"
+    "0.0.0-SNAPSHOT"
 }
 
 plugins {
