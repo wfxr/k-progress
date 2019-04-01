@@ -1,5 +1,9 @@
 group = "com.github.wfxr"
-version = "0.1.0"
+version = try {
+    rootProject.file("version").readText().trim()
+} catch (e: Exception) {
+    "SNAPSHOT"
+}
 
 plugins {
     id("org.jetbrains.kotlin.jvm").version("1.3.21")
